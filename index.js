@@ -1,4 +1,11 @@
 var mysql = require('mysql2');
+var express = require('express');
+const bcrypt = require('bcrypt');
+//using bcrypts for hashing of passwords
+
+var saltRounds =5;
+//this is a demo project thats why we are keeping salt rounds low
+
 const connection = mysql.createConnection({
 
     host: 'localhost',
@@ -10,37 +17,93 @@ const connection = mysql.createConnection({
 
 });
 
+//
 
-
-connection.connect(function(error) {
-    if(error) throw error;
-    console.log('You are now Connected...');
+connection.connect(function(err){
+    if(!err) {
+        console.log("Database is connected ... ");
+    } else {
+        console.log("Error connecting database ... ");
+    }
 });
 
+//var sql = "CREATE TABLE users (name VARCHAR(255),username VARCHAR(255),email VARCHAR(255), password VARCHAR(255))";
+//connection.query(sql, function (err, result) {
+     
+//        if (err) throw err;
+//      console.log("Table created in our Database");
+//   });
 
-//to insert record into mysql
-connection.query('INSERT INTO `employee` (`employee_name`, `employee_salary`, `employee_age`) VALUES ("Adam", 2000 , 30)', function (error, results, fields) {
-    if (error) throw error;
-    console.log('The response is: ', results);
-  });
+//handler for user registrations 
+exports.register = async function(req,res){
+    const password = req.body.password;
+    //here I used bcrypt for users password encryption
+    const encryptedPassword = await bcrypt.hash(password, saltRounds)
+    
+    var users={
+        "name": req.body.name,
+        "username": req.body.username,
+        "email": req.body.email,
+        "password": encryptedPassword
+     }
+    
+    connection.query('INSERT INTO users SET ?',users, function (error, results, fields) {
+        if (error) {
+        res.send({
+            "code":400,
+            "failed":"error ocurred" 
+        });
+        } 
+        
+        else {
+        res.send({
+            "code":200,
+            "success":"user registered sucessfully"
+        });
+        }
+    });
+  }
 
-//to update record into mysql
-connection.query('UPDATE `employee` SET `employee_name`="William",`employee_salary`=2500,`employee_age`=32 where `id`=1', function (error, results, fields) {
-    if (error) throw error;
-    console.log('The response is: ', results);
-  });
 
+exports.login = async function(req,res){
+    var username =req.body.username;
+    var email= req.body.email;
+    var password = req.body.password;
 
-  //to update record into mysql
-connection.query('UPDATE `employee` SET `employee_name`="William",`employee_salary`=2500,`employee_age`=32 where `id`=1', function (error, results, fields) {
-    if (error) throw error;
-    console.log('The response is: ', results);
-  });
-
-//delete record from mysql database
-connection.query('delete from employee where id=1', function (error, results, fields) {
-    if (error) throw error;
-    console.log('The response is: ', results);
-  });
-
-connection.end();
+    connection.query(
+        
+        'SELECT * FROM users WHERE username = ?',[username],
+        'SELECT * FROM users WHERE email = ?',[email],
+        
+    async function (error, results, fields) {
+    if (error) {
+        res.send({
+            "code":400,
+            "failed":"error ocurred"
+        })
+      }
+      else{
+        if(results.length >0){
+          const comparision = await bcrypt.compare(password, results[0].password)
+          if(comparision){
+              res.send({
+                "code":200,
+                "success":"login sucessfull"
+              })
+          }
+          else{
+            res.send({
+                 "code":204,
+                 "success":"Email and password does not match"
+            })
+          }
+        }
+        else{
+          res.send({
+            "code":206,
+            "success":"Email does not exits"
+              });
+        }
+      }
+      });
+  }
